@@ -1,8 +1,5 @@
 import Header from "@/components/Header";
 import HeroSection from "@/components/HeroSection";
-import MissionSection from "@/components/MissionSection";
-import ValuePropositionSection from "@/components/ValuePropositionSection";
-import VisionSection from "@/components/VisionSection";
 import SubscriptionSection from "@/components/SubscriptionSection";
 import Footer from "@/components/Footer";
 import { useEffect } from "react";
@@ -33,7 +30,7 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="font-sans bg-background text-foreground">
+    <div className="font-sans bg-background text-foreground min-h-screen flex flex-col">
       <Helmet>
         <title>ThereWeGo.AI - Elevating Insurance with AI</title>
         <meta name="description" content="ThereWeGo.AI is elevating the insurance space with AI-driven solutions founded in decades of industry experience and a deep understanding of customer needs." />
@@ -44,11 +41,10 @@ export default function Home() {
       </Helmet>
       
       <Header />
-      <HeroSection />
-      <MissionSection />
-      <ValuePropositionSection />
-      <VisionSection />
-      <SubscriptionSection />
+      <main className="flex-grow">
+        <HeroSection />
+        <SubscriptionSection />
+      </main>
       <Footer />
 
       <style jsx global>{`
@@ -58,22 +54,13 @@ export default function Home() {
         
         .reveal {
           opacity: 0;
-          transform: translateY(30px);
-          transition: opacity 0.8s ease, transform 0.8s ease;
+          transform: translateY(20px);
+          transition: opacity 0.6s ease, transform 0.6s ease;
         }
         
         .reveal.active {
           opacity: 1;
           transform: translateY(0);
-        }
-        
-        .card {
-          transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
-        }
-        
-        .card:hover {
-          transform: translateY(-5px);
-          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
         }
       `}</style>
     </div>
