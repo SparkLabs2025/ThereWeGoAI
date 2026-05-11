@@ -1,9 +1,11 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertWaitlistEntrySchema } from "@shared/schema";
+import { insertWaitlistEntrySchema, itineraryRequestSchema } from "@shared/schema";
+import type { GeneratedItinerary } from "@shared/schema";
 import { ZodError } from "zod";
 import nodemailer from "nodemailer";
+import Anthropic from "@anthropic-ai/sdk";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Waitlist subscription endpoint
@@ -41,6 +43,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
           success: false, 
           message: "Failed to add to waitlist" 
         });
+      }
+    }
+  });
+
+  // Uruguay itinerary generation endpoint
+  app.post("/api/itinerary/generate", async (req, res) => {
+    try {
+      const request = itineraryRequestSchema.parse(req.body);
+
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+      const systemPrompt = `You are an expert Uruguay travel guide with deep knowledge of every region, attraction, restaurant, and hidden gem in the country. You create detailed, practical, and inspiring travel itineraries tailored to the traveler's specific preferences.
+
+Always respond with a single valid JSON object matching exactly this TypeScript interface (no markdown, no code fences, just raw JSON):
+
+{
+  "title": string,
+  "summary": string,
+  "totalDays": number,
+  "travelStyle": string,
+  "highlights": string[],           // 4-6 trip highlights
+  "days": Array<{
+    "day": number,
+    "location": string,
+    "title": string,
+    "description": string,
+    "activities": Array<{
+      "name": string,
+      "description": string,
+      "duration": string,
+      "type": string
+    }>,
+    "meals": Array<{
+      "type": "breakfast" | "lunch" | "dinner",
+      "suggestion": string,
+      "description": string
+    }>,
+    "accommodation": string,
+    "tips": string[]
+  }>,
+  "packingTips": string[],          // 5-7 packing tips for Uruguay
+  "bestTimeToVisit": string,
+  "estimatedBudget": string
+}
+
+Include real Uruguayan locations, restaurants, and attractions. Be specific and practical.`;
+
+      const budgetLabels: Record<string, string> = {
+        budget: "budget-conscious (hostels, street food, free activities)",
+        moderate: "mid-range (3-star hotels, local restaurants, some paid attractions)",
+        luxury: "luxury (boutique hotels, fine dining, premium experiences)",
+      };
+
+      const userPrompt = `Generate a ${request.duration}-day Uruguay travel itinerary with these preferences:
+- Travel style: ${request.travelStyle.replace("_", " & ")}
+- Group type: ${request.groupType}
+- Budget level: ${budgetLabels[request.budget]}
+- Interests: ${request.interests.join(", ")}
+
+Make the itinerary flow logically between locations to minimize backtracking. Include a mix of famous and off-the-beaten-path experiences. Each day should have 2-4 activities and 2-3 meal suggestions at real Uruguayan establishments.`;
+
+      const message = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 8192,
+        system: [
+          {
+            type: "text",
+            text: systemPrompt,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        messages: [{ role: "user", content: userPrompt }],
+      });
+
+      const content = message.content[0];
+      if (content.type !== "text") {
+        throw new Error("Unexpected response type from Claude");
+      }
+
+      const itinerary: GeneratedItinerary = JSON.parse(content.text);
+      res.json({ success: true, itinerary });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        res.status(400).json({ success: false, message: "Invalid request", errors: error.errors });
+      } else if (error instanceof SyntaxError) {
+        console.error("Failed to parse itinerary JSON:", error);
+        res.status(500).json({ success: false, message: "Failed to parse generated itinerary" });
+      } else {
+        console.error("Error generating itinerary:", error);
+        res.status(500).json({ success: false, message: "Failed to generate itinerary" });
       }
     }
   });
